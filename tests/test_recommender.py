@@ -1,5 +1,5 @@
 import os
-from src.recommender import load_songs, score_song, recommend_songs
+from src.recommender import load_songs, Song, UserProfile, Recommender
 
 # Helper to get test data path
 def get_test_csv_path():
@@ -21,21 +21,23 @@ class TestLoadSongs:
         songs = load_songs(get_test_csv_path())
         first_song = songs[0]
 
-        # Check that numeric fields exist and are floats
-        numeric_fields = ['id', 'energy', 'tempo_bpm', 'valence', 'danceability', 'acousticness']
-        for field in numeric_fields:
-            if field in first_song:
-                assert isinstance(first_song[field], float), f"{field} should be float"
+        # Check that numeric fields are floats
+        assert isinstance(first_song.id, (int, float))
+        assert isinstance(first_song.energy, float)
+        assert isinstance(first_song.tempo_bpm, float)
+        assert isinstance(first_song.valence, float)
 
     def test_load_songs_has_required_fields(self):
         """Each song should have required fields for scoring."""
         songs = load_songs(get_test_csv_path())
         first_song = songs[0]
 
-        # These are the fields used in score_song
-        required_fields = ['genre', 'mood', 'energy', 'tempo_bpm', 'valence']
-        for field in required_fields:
-            assert field in first_song, f"Song missing required field: {field}"
+        # Verify Song dataclass has all required fields
+        assert hasattr(first_song, 'genre')
+        assert hasattr(first_song, 'mood')
+        assert hasattr(first_song, 'energy')
+        assert hasattr(first_song, 'tempo_bpm')
+        assert hasattr(first_song, 'valence')
 
 
 class TestScoreSong:
@@ -43,21 +45,25 @@ class TestScoreSong:
 
     def test_score_song_returns_tuple(self):
         """score_song should return (score, reasons) tuple."""
-        user_prefs = {
-            'favorite_genre': 'pop',
-            'favorite_mood': 'happy',
-            'target_energy': 0.8,
-            'target_tempo': 120,
-            'target_valence': 0.7,
-        }
-        song = {
-            'genre': 'pop',
-            'mood': 'happy',
-            'energy': 0.8,
-            'tempo_bpm': 120,
-            'valence': 0.7,
-        }
-        result = score_song(user_prefs, song)
+        user = UserProfile(
+            favorite_genre='pop',
+            favorite_mood='happy',
+            target_energy=0.8,
+            target_tempo=120,
+            target_valence=0.7,
+        )
+        song = Song(
+            id=1,
+            title='Test Song',
+            artist='Test Artist',
+            genre='pop',
+            mood='happy',
+            energy=0.8,
+            tempo_bpm=120,
+            valence=0.7,
+        )
+        recommender = Recommender([song])
+        result = recommender.score_song(user, song)
         assert isinstance(result, tuple)
         assert len(result) == 2
         score, reasons = result
@@ -66,63 +72,67 @@ class TestScoreSong:
 
     def test_score_song_genre_matching(self):
         """Genre match should increase score."""
-        user_prefs = {'favorite_genre': 'rock', 'favorite_mood': 'chill',
-                      'target_energy': 0.5, 'target_tempo': 100, 'target_valence': 0.5}
+        user = UserProfile(favorite_genre='rock', favorite_mood='chill',
+                          target_energy=0.5, target_tempo=100, target_valence=0.5)
 
         # Matching genre
-        song_match = {'genre': 'rock', 'mood': 'chill', 'energy': 0.5,
-                      'tempo_bpm': 100, 'valence': 0.5}
-        score_match, _ = score_song(user_prefs, song_match)
-
+        song_match = Song(id=1, title='Rock Song', artist='Artist', genre='rock', mood='chill',
+                         energy=0.5, tempo_bpm=100, valence=0.5)
         # Non-matching genre
-        song_no_match = {'genre': 'jazz', 'mood': 'chill', 'energy': 0.5,
-                         'tempo_bpm': 100, 'valence': 0.5}
-        score_no_match, _ = score_song(user_prefs, song_no_match)
+        song_no_match = Song(id=2, title='Jazz Song', artist='Artist', genre='jazz', mood='chill',
+                            energy=0.5, tempo_bpm=100, valence=0.5)
+
+        recommender = Recommender([song_match, song_no_match])
+        score_match, _ = recommender.score_song(user, song_match)
+        score_no_match, _ = recommender.score_song(user, song_no_match)
 
         assert score_match > score_no_match, "Matching genre should score higher"
 
     def test_score_song_mood_matching(self):
         """Mood match should increase score."""
-        user_prefs = {'favorite_genre': 'pop', 'favorite_mood': 'happy',
-                      'target_energy': 0.5, 'target_tempo': 100, 'target_valence': 0.5}
+        user = UserProfile(favorite_genre='pop', favorite_mood='happy',
+                          target_energy=0.5, target_tempo=100, target_valence=0.5)
 
         # Matching mood
-        song_match = {'genre': 'pop', 'mood': 'happy', 'energy': 0.5,
-                      'tempo_bpm': 100, 'valence': 0.5}
-        score_match, _ = score_song(user_prefs, song_match)
-
+        song_match = Song(id=1, title='Happy Song', artist='Artist', genre='pop', mood='happy',
+                         energy=0.5, tempo_bpm=100, valence=0.5)
         # Non-matching mood
-        song_no_match = {'genre': 'pop', 'mood': 'sad', 'energy': 0.5,
-                         'tempo_bpm': 100, 'valence': 0.5}
-        score_no_match, _ = score_song(user_prefs, song_no_match)
+        song_no_match = Song(id=2, title='Sad Song', artist='Artist', genre='pop', mood='sad',
+                            energy=0.5, tempo_bpm=100, valence=0.5)
+
+        recommender = Recommender([song_match, song_no_match])
+        score_match, _ = recommender.score_song(user, song_match)
+        score_no_match, _ = recommender.score_song(user, song_no_match)
 
         assert score_match > score_no_match, "Matching mood should score higher"
 
     def test_score_song_energy_proximity(self):
         """Songs close to target energy should score higher."""
-        user_prefs = {'favorite_genre': 'pop', 'favorite_mood': 'happy',
-                      'target_energy': 0.8, 'target_tempo': 100, 'target_valence': 0.5}
+        user = UserProfile(favorite_genre='pop', favorite_mood='happy',
+                          target_energy=0.8, target_tempo=100, target_valence=0.5)
 
         # Close to target energy
-        song_close = {'genre': 'pop', 'mood': 'happy', 'energy': 0.79,
-                      'tempo_bpm': 100, 'valence': 0.5}
-        score_close, _ = score_song(user_prefs, song_close)
-
+        song_close = Song(id=1, title='High Energy', artist='Artist', genre='pop', mood='happy',
+                         energy=0.79, tempo_bpm=100, valence=0.5)
         # Far from target energy
-        song_far = {'genre': 'pop', 'mood': 'happy', 'energy': 0.2,
-                    'tempo_bpm': 100, 'valence': 0.5}
-        score_far, _ = score_song(user_prefs, song_far)
+        song_far = Song(id=2, title='Low Energy', artist='Artist', genre='pop', mood='happy',
+                       energy=0.2, tempo_bpm=100, valence=0.5)
+
+        recommender = Recommender([song_close, song_far])
+        score_close, _ = recommender.score_song(user, song_close)
+        score_far, _ = recommender.score_song(user, song_far)
 
         assert score_close > score_far, "Song closer to target energy should score higher"
 
     def test_score_song_includes_reasons(self):
         """Reasons should explain the scoring."""
-        user_prefs = {'favorite_genre': 'pop', 'favorite_mood': 'happy',
-                      'target_energy': 0.8, 'target_tempo': 120, 'target_valence': 0.7}
-        song = {'genre': 'pop', 'mood': 'happy', 'energy': 0.8,
-                'tempo_bpm': 120, 'valence': 0.7}
+        user = UserProfile(favorite_genre='pop', favorite_mood='happy',
+                          target_energy=0.8, target_tempo=120, target_valence=0.7)
+        song = Song(id=1, title='Perfect Song', artist='Artist', genre='pop', mood='happy',
+                   energy=0.8, tempo_bpm=120, valence=0.7)
 
-        score, reasons = score_song(user_prefs, song)
+        recommender = Recommender([song])
+        score, reasons = recommender.score_song(user, song)
 
         assert len(reasons) > 0, "Should have reasons for the score"
         # Check that reasons mention key metrics
@@ -134,22 +144,23 @@ class TestRecommendSongs:
     """Tests for the recommendation function."""
 
     def test_recommend_songs_returns_sorted_list(self):
-        """recommend_songs should return songs sorted by score (highest first)."""
-        user_prefs = {
-            'favorite_genre': 'pop',
-            'favorite_mood': 'happy',
-            'target_energy': 0.8,
-            'target_tempo': 120,
-            'target_valence': 0.7,
-        }
+        """recommend should return songs sorted by score (highest first)."""
+        user = UserProfile(
+            favorite_genre='pop',
+            favorite_mood='happy',
+            target_energy=0.8,
+            target_tempo=120,
+            target_valence=0.7,
+        )
         songs = [
-            {'id': 1, 'genre': 'pop', 'mood': 'happy', 'energy': 0.8,
-             'tempo_bpm': 120, 'valence': 0.7, 'title': 'Perfect Match'},
-            {'id': 2, 'genre': 'jazz', 'mood': 'sad', 'energy': 0.3,
-             'tempo_bpm': 80, 'valence': 0.3, 'title': 'Wrong Match'},
+            Song(id=1, title='Perfect Match', artist='Artist 1', genre='pop', mood='happy',
+                energy=0.8, tempo_bpm=120, valence=0.7),
+            Song(id=2, title='Wrong Match', artist='Artist 2', genre='jazz', mood='sad',
+                energy=0.3, tempo_bpm=80, valence=0.3),
         ]
 
-        results = recommend_songs(user_prefs, songs, k=2)
+        recommender = Recommender(songs)
+        results = recommender.recommend(user, k=2)
 
         assert len(results) == 2
         # Results should be tuples of (song, score, explanation)
@@ -158,31 +169,33 @@ class TestRecommendSongs:
         assert results[0][1] >= results[1][1], "Results should be sorted by score descending"
 
     def test_recommend_songs_respects_k_parameter(self):
-        """recommend_songs should return at most k recommendations."""
-        user_prefs = {'favorite_genre': 'pop', 'favorite_mood': 'happy',
-                      'target_energy': 0.5, 'target_tempo': 100, 'target_valence': 0.5}
+        """recommend should return at most k recommendations."""
+        user = UserProfile(favorite_genre='pop', favorite_mood='happy',
+                          target_energy=0.5, target_tempo=100, target_valence=0.5)
         songs = [
-            {'id': i, 'genre': 'pop', 'mood': 'happy', 'energy': 0.5,
-             'tempo_bpm': 100, 'valence': 0.5, 'title': f'Song {i}'}
+            Song(id=i, title=f'Song {i}', artist='Artist', genre='pop', mood='happy',
+                energy=0.5, tempo_bpm=100, valence=0.5)
             for i in range(10)
         ]
 
-        results_k3 = recommend_songs(user_prefs, songs, k=3)
-        results_k5 = recommend_songs(user_prefs, songs, k=5)
+        recommender = Recommender(songs)
+        results_k3 = recommender.recommend(user, k=3)
+        results_k5 = recommender.recommend(user, k=5)
 
         assert len(results_k3) == 3
         assert len(results_k5) == 5
 
     def test_recommend_songs_includes_explanations(self):
         """Each recommendation should include an explanation."""
-        user_prefs = {'favorite_genre': 'pop', 'favorite_mood': 'happy',
-                      'target_energy': 0.8, 'target_tempo': 120, 'target_valence': 0.7}
+        user = UserProfile(favorite_genre='pop', favorite_mood='happy',
+                          target_energy=0.8, target_tempo=120, target_valence=0.7)
         songs = [
-            {'id': 1, 'genre': 'pop', 'mood': 'happy', 'energy': 0.8,
-             'tempo_bpm': 120, 'valence': 0.7, 'title': 'Great Song'},
+            Song(id=1, title='Great Song', artist='Artist', genre='pop', mood='happy',
+                energy=0.8, tempo_bpm=120, valence=0.7),
         ]
 
-        results = recommend_songs(user_prefs, songs, k=1)
+        recommender = Recommender(songs)
+        results = recommender.recommend(user, k=1)
         _, _, explanation = results[0]
 
         assert isinstance(explanation, str)
@@ -190,51 +203,53 @@ class TestRecommendSongs:
         assert '\n' in explanation, "Explanation should have multiple reasons"
 
     def test_recommend_songs_with_real_data(self):
-        """Test recommend_songs with actual CSV data."""
+        """Test recommend with actual CSV data."""
         songs = load_songs(get_test_csv_path())
-        user_prefs = {
-            'favorite_genre': 'pop',
-            'favorite_mood': 'happy',
-            'target_energy': 0.8,
-            'target_tempo': 120,
-            'target_valence': 0.7,
-        }
+        user = UserProfile(
+            favorite_genre='pop',
+            favorite_mood='happy',
+            target_energy=0.8,
+            target_tempo=120,
+            target_valence=0.7,
+        )
 
-        results = recommend_songs(user_prefs, songs, k=5)
+        recommender = Recommender(songs)
+        results = recommender.recommend(user, k=5)
 
         assert len(results) <= 5
         assert len(results) > 0, "Should have at least one recommendation"
 
         # Verify structure
         for song, score, explanation in results:
-            assert isinstance(song, dict)
+            assert isinstance(song, Song)
             assert isinstance(score, (int, float))
             assert isinstance(explanation, str)
 
     def test_recommend_songs_different_profiles(self):
         """Different user profiles should get different recommendations."""
         songs = load_songs(get_test_csv_path())
+        recommender = Recommender(songs)
 
         # High-energy EDM fan
-        edm_profile = {
-            'favorite_genre': 'electronic',
-            'favorite_mood': 'energetic',
-            'target_energy': 0.9,
-            'target_tempo': 130,
-            'target_valence': 0.8,
-        }
+        edm_profile = UserProfile(
+            favorite_genre='electronic',
+            favorite_mood='energetic',
+            target_energy=0.9,
+            target_tempo=130,
+            target_valence=0.8,
+        )
 
         # Chill acoustic fan
-        acoustic_profile = {
-            'favorite_genre': 'acoustic',
-            'favorite_mood': 'calm',
-            'target_energy': 0.3,
-            'target_tempo': 80,
-            'target_valence': 0.5,
-        }
+        acoustic_profile = UserProfile(
+            favorite_genre='acoustic',
+            favorite_mood='calm',
+            target_energy=0.3,
+            target_tempo=80,
+            target_valence=0.5,
+        )
 
-        edm_results = recommend_songs(edm_profile, songs, k=3)
-        acoustic_results = recommend_songs(acoustic_profile, songs, k=3)
+        edm_results = recommender.recommend(edm_profile, k=3)
+        acoustic_results = recommender.recommend(acoustic_profile, k=3)
 
         # Get the top recommendation for each
         edm_top = edm_results[0][0] if edm_results else None
