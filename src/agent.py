@@ -1,5 +1,22 @@
 from typing import List, Tuple, Optional
+from dataclasses import dataclass
+from enum import Enum
 from .recommender import Recommender, UserProfile, Song
+
+
+class ParseStatus(Enum):
+    """Status of feedback parsing."""
+    CLEAR = "clear"
+    AMBIGUOUS = "ambiguous"
+    UNSUPPORTED = "unsupported"
+
+
+@dataclass
+class ParseResult:
+    """Result of parsing user feedback."""
+    commands: List[Tuple[str, str, float]]  # List of (command, param, change)
+    status: ParseStatus
+    reason: str
 
 
 class RecommendationAgent:
@@ -60,10 +77,11 @@ class RecommendationAgent:
 
         # Main feedback loop
         print("\nYou can now provide feedback to refine recommendations.")
-        print("\nSupported feedback commands:")
-        print("  Energy: 'more energetic', 'calmer'")
-        print("  Mood: 'happier', 'sadder'")
-        print("  Tempo: 'faster', 'slower'")
+        print("\nSupported feedback types:")
+        print("  Energy: 'more/less energetic', 'increase/decrease energy', etc.")
+        print("  Valence: 'happier/sadder', 'more/less positive', 'higher/lower valence',  etc.")
+        print("  Tempo: 'faster/slower', 'higher/lower tempo', etc.")
+        print("\n  💡 Combine non-conflicting types: 'more energetic and happier'")
         print("  Exit: 'quit'\n")
 
         while True:
@@ -116,44 +134,107 @@ class RecommendationAgent:
     def _process_feedback(self, feedback: str) -> None:
         """Process user feedback through the agentic workflow."""
         # Step 1: Analyze
-        param, change, command = self._analyze_feedback(feedback)
-        if param is None:
+        parsed = self._analyze_feedback(feedback)
+
+        # Handle unsupported feedback
+        if parsed.status == ParseStatus.UNSUPPORTED:
             self._show_unsupported_feedback()
             return
 
-        # Step 2: Plan
-        old_value, new_value = self._plan_profile_update(param, change)
+        # Handle ambiguous feedback (ask for confirmation)
+        if parsed.status == ParseStatus.AMBIGUOUS:
+            confirmed = self._ask_user_confirmation(parsed)
+            if not confirmed:
+                print("Understood. Please try again with clearer instructions.\n")
+                return
 
-        # Step 3: Act
-        self._act_update_profile(param, new_value)
+        # Step 2: Plan and Step 3: Act (apply all confirmed commands)
+        assert self.profile is not None
+        changes = []  # Track (param, old_value, new_value, command_text) for each change
+
+        for command, param, change in parsed.commands:
+            old_value, new_value = self._plan_profile_update(param, change)
+            self._act_update_profile(param, new_value)
+            changes.append((param, old_value, new_value, command))
 
         # Step 4: Evaluate
         old_avg_score, new_avg_score, songs_changed = self._evaluate_changes()
 
         # Step 5: Explain
-        assert command is not None
-        self._explain_changes(
-            param,
-            old_value,
-            new_value,
-            command,
-            old_avg_score,
-            new_avg_score,
-            songs_changed,
-        )
+        self._explain_changes(changes, old_avg_score, new_avg_score, songs_changed)
 
         # Show new recommendations
         print()
         self._show_recommendations()
 
-    def _analyze_feedback(
-        self, feedback: str
-    ) -> Tuple[Optional[str], float, Optional[str]]:
+    def _ask_user_confirmation(self, parsed: ParseResult) -> bool:
+        """Ask user to confirm ambiguous feedback."""
+        print(f"\n⚠️  {parsed.reason}")
+        print("\nCommands found:")
+        for command, param, change in parsed.commands:
+            direction = "increase" if change > 0 else "decrease"
+            print(f"  • {command} ({direction} {param})")
+
+        response = input("\nProceed with these changes? (yes/no): ").strip().lower()
+        return response in ("yes", "y")
+
+    def _analyze_feedback(self, feedback: str) -> ParseResult:
         """Step 1: Analyze user feedback and recognize commands."""
+        feedback_lower = feedback.lower()
+        found_commands = []
+        matched_command_texts = []
+
+        # Find all matching commands
         for command, (param, change) in self.FEEDBACK_COMMANDS.items():
-            if command in feedback:
-                return param, change, command
-        return None, 0.0, None
+            if command in feedback_lower:
+                found_commands.append((command, param, change))
+                matched_command_texts.append(command)
+
+        # No matches found
+        if not found_commands:
+            return ParseResult(
+                commands=[],
+                status=ParseStatus.UNSUPPORTED,
+                reason="No recognized commands found.",
+            )
+
+        # Check for negations
+        negation_words = ["don't", "don't", "not", "no ", "never"]
+        has_negation = any(word in feedback_lower for word in negation_words)
+
+        # Check for conflicting commands (same parameter with different changes)
+        param_changes = {}
+        for command, param, change in found_commands:
+            if param not in param_changes:
+                param_changes[param] = []
+            param_changes[param].append((command, change))
+
+        conflicting = any(
+            len(changes) > 1 and changes[0][1] != changes[1][1]
+            for changes in param_changes.values()
+        )
+
+        # Determine status
+        if conflicting:
+            return ParseResult(
+                commands=found_commands,
+                status=ParseStatus.AMBIGUOUS,
+                reason=f"Conflicting commands detected: {', '.join(matched_command_texts)}",
+            )
+
+        if has_negation:
+            return ParseResult(
+                commands=found_commands,
+                status=ParseStatus.AMBIGUOUS,
+                reason=f"Negation detected with commands: {', '.join(matched_command_texts)}. Please clarify.",
+            )
+
+        # Single clear command
+        return ParseResult(
+            commands=found_commands,
+            status=ParseStatus.CLEAR,
+            reason="",
+        )
 
     def _plan_profile_update(
         self, param: str, change: float
@@ -201,33 +282,34 @@ class RecommendationAgent:
 
     def _explain_changes(
         self,
-        param: str,
-        old_value: float,
-        new_value: float,
-        command: str,
+        changes: List[Tuple[str, float, float, str]],
         old_avg_score: float,
         new_avg_score: float,
         songs_changed: int,
     ) -> None:
         """Step 5: Explain what was changed and why."""
-        param_name = {
+        param_names = {
             "energy": "energy",
-            "valence": "positivity",
+            "valence": "valence",
             "tempo": "tempo",
-        }[param]
+        }
 
-        # Show the user's request
-        print(f"\nYou requested:")
-        print(f'"{command}"')
+        # Show all changes made
+        print("\nYou requested:")
+        for _, _, _, command in changes:
+            print(f'  • "{command}"')
         print()
 
-        # Explain the change
-        if old_value == new_value:
-            print(f"✓ Your target {param_name} is already at its limit ({old_value:.2f}).")
-        else:
-            direction = "increased" if new_value > old_value else "decreased"
-            print(f"I {direction} your target {param_name}")
-            print(f"from {old_value:.2f} → {new_value:.2f}.")
+        # Explain each change
+        for param, old_value, new_value, command in changes:
+            param_name = param_names[param]
+
+            if old_value == new_value:
+                print(f"✓ Your target {param_name} is already at its limit ({old_value:.2f}).")
+            else:
+                direction = "increased" if new_value > old_value else "decreased"
+                print(f"✓ I {direction} your target {param_name}")
+                print(f"  from {old_value:.2f} → {new_value:.2f}.")
 
         # Report impact on recommendations
         print()
@@ -273,9 +355,10 @@ class RecommendationAgent:
     def _show_unsupported_feedback(self) -> None:
         """Show message when feedback is not recognized."""
         print("\n❌ I didn't recognize that command.")
-        print("\nSupported feedback commands:")
-        print("  Energy: 'more energetic', 'calmer'")
-        print("  Mood: 'happier', 'sadder'")
-        print("  Tempo: 'faster', 'slower'")
+        print("\nSupported feedback types:")
+        print("  Energy: 'more/less energetic', 'increase/decrease energy', etc.")
+        print("  Valence: 'happier/sadder', 'more/less positive', etc.")
+        print("  Tempo: 'faster/slower', 'higher/lower tempo', etc.")
+        print("\n  💡 Combine non-conflicting types: 'more energetic and happier'")
         print("  Exit: 'quit'\n")
-        print("Try again with one of these commands:\n")
+        print("Try again with one of these types:\n")
