@@ -1,7 +1,19 @@
 from typing import List, Tuple, Optional
 from dataclasses import dataclass
 from enum import Enum
+import logging
 from .recommender import Recommender, UserProfile, Song
+
+# Configure logging at module level
+logger = logging.getLogger(__name__)
+if not logger.handlers:
+    import os
+    os.makedirs("logs", exist_ok=True)
+    handler = logging.FileHandler("logs/agent.log")
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
 
 
 class ParseStatus(Enum):
@@ -64,10 +76,16 @@ class RecommendationAgent:
 
     def start_session(self) -> None:
         """Start an interactive recommendation session."""
+        logger.info("=== Session Started ===")
         print("\n🎵 Welcome to the Interactive Music Recommender!\n")
 
         # Gather initial preferences
         self.profile = self._get_initial_profile()
+        logger.info(
+            f"Initial profile: genre={self.profile.favorite_genre}, "
+            f"mood={self.profile.favorite_mood}, energy={self.profile.target_energy}, "
+            f"tempo={self.profile.target_tempo}, valence={self.profile.target_valence}"
+        )
 
         # Show initial recommendations
         print("\n" + "=" * 70)
@@ -88,6 +106,7 @@ class RecommendationAgent:
             feedback = input("Your feedback: ").strip().lower()
 
             if feedback == "quit":
+                logger.info("=== Session Ended ===")
                 print("\nThanks for using the Music Recommender! 🎵")
                 break
 
@@ -133,8 +152,11 @@ class RecommendationAgent:
 
     def _process_feedback(self, feedback: str) -> None:
         """Process user feedback through the agentic workflow."""
+        logger.info(f"User feedback received: {feedback}")
+
         # Step 1: Analyze
         parsed = self._analyze_feedback(feedback)
+        logger.info(f"Parse status: {parsed.status.value} - {parsed.reason}")
 
         # Handle unsupported feedback
         if parsed.status == ParseStatus.UNSUPPORTED:
@@ -155,10 +177,17 @@ class RecommendationAgent:
         for command, param, change in parsed.commands:
             old_value, new_value = self._plan_profile_update(param, change)
             self._act_update_profile(param, new_value)
+            logger.info(
+                f"Applied {param}: {old_value:.2f} -> {new_value:.2f}"
+            )
             changes.append((param, old_value, new_value, command))
 
         # Step 4: Evaluate
         old_avg_score, new_avg_score, songs_changed = self._evaluate_changes()
+        logger.info(
+            f"Evaluation: {songs_changed} songs changed, "
+            f"average score {old_avg_score:.1f} -> {new_avg_score:.1f}"
+        )
 
         # Step 5: Explain
         self._explain_changes(changes, old_avg_score, new_avg_score, songs_changed)
@@ -169,6 +198,7 @@ class RecommendationAgent:
 
     def _ask_user_confirmation(self, parsed: ParseResult) -> bool:
         """Ask user to confirm ambiguous feedback."""
+        logger.info(f"Confirmation requested: {parsed.reason}")
         print(f"\n⚠️  {parsed.reason}")
         print("\nCommands found:")
         for command, param, change in parsed.commands:
@@ -176,7 +206,9 @@ class RecommendationAgent:
             print(f"  • {command} ({direction} {param})")
 
         response = input("\nProceed with these changes? (yes/no): ").strip().lower()
-        return response in ("yes", "y")
+        confirmed = response in ("yes", "y")
+        logger.info(f"User confirmation response: {'approved' if confirmed else 'rejected'}")
+        return confirmed
 
     def _analyze_feedback(self, feedback: str) -> ParseResult:
         """Step 1: Analyze user feedback and recognize commands."""
@@ -199,7 +231,7 @@ class RecommendationAgent:
             )
 
         # Check for negations
-        negation_words = ["don't", "don't", "not", "no ", "never"]
+        negation_words = ["don't", "not", "no ", "never"]
         has_negation = any(word in feedback_lower for word in negation_words)
 
         # Check for conflicting commands (same parameter with different changes)
@@ -354,6 +386,7 @@ class RecommendationAgent:
 
     def _show_unsupported_feedback(self) -> None:
         """Show message when feedback is not recognized."""
+        logger.warning("Unsupported command received")
         print("\n❌ I didn't recognize that command.")
         print("\nSupported feedback types:")
         print("  Energy: 'more/less energetic', 'increase/decrease energy', etc.")
