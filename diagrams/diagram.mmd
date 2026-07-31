@@ -1,0 +1,95 @@
+graph TB
+    subgraph "User Interface"
+        User["👤 User<br/>(CLI Input)"]
+    end
+
+    subgraph "Initial Setup"
+        GetProfile["Get Initial Profile<br/>(genre, mood, energy, tempo, valence)"]
+        UserProfile["🎵 UserProfile<br/>(Data Structure)"]
+    end
+
+    subgraph "Core Recommendation Engine"
+        SongDB["🎵 Song Database<br/>(CSV: 20 songs)"]
+        Recommender["🎯 Recommender<br/>(Score & Rank)"]
+        Scorer["Score Algorithm<br/>Genre, Mood, Energy,<br/>Tempo, Valence"]
+    end
+
+    subgraph "Agent Feedback Loop"
+        Agent["🤖 RecommendationAgent<br/>(Agentic Workflow)"]
+        Analyze["Step 1: Analyze<br/>(Parse Feedback)"]
+        Plan["Step 2: Plan<br/>(Bounds Check)"]
+        Act["Step 3: Act<br/>(Update Profile)"]
+        Evaluate["Step 4: Evaluate<br/>(Compare Results)"]
+        Explain["Step 5: Explain<br/>(Show Changes)"]
+    end
+
+    subgraph "Reliability & Guardrails"
+        ParseStatus["ParseStatus<br/>(CLEAR/AMBIGUOUS/<br/>UNSUPPORTED)"]
+        Confirm["Human Confirmation<br/>(Ask user if<br/>ambiguous)"]
+        Logger["📝 Logger<br/>(logs/agent.log)"]
+    end
+
+    subgraph "User Evaluation"
+        Review["👁️ Review Results<br/>(User checks<br/>recommendations)"]
+        Feedback["💬 Provide Feedback<br/>OR quit"]
+    end
+
+    subgraph "Testing & Verification"
+        TestAgent["🧪 test_agent.py<br/>Parsing<br/>Workflow<br/>Guardrails"]
+        TestRecommender["🧪 test_recommender.py<br/>Scoring<br/>Ranking<br/>CSV Loading"]
+    end
+
+    %% Initial flow
+    User -->|1. Input preferences| GetProfile
+    GetProfile -->|2. Create| UserProfile
+    UserProfile -->|3. Pass to| Recommender
+
+    %% Recommendation engine
+    SongDB -->|Feed songs| Recommender
+    Recommender -->|Use| Scorer
+    Scorer -->|Scores songs| Recommender
+    Recommender -->|4. Return top 5| Review
+
+    %% Feedback loop
+    Review -->|5. User reads| Feedback
+    Feedback -->|"more energetic,<br/>faster, etc."| Agent
+
+    %% Agent workflow
+    Agent -->|Orchestrates| Analyze
+    Analyze -->|Parse commands| ParseStatus
+    ParseStatus -->|If AMBIGUOUS| Confirm
+    Confirm -->|User approves| Plan
+    ParseStatus -->|If CLEAR| Plan
+    ParseStatus -->|If UNSUPPORTED| Review
+
+    Plan -->|Bounds checking| Act
+    Act -->|Update| UserProfile
+    Act -->|Log change| Logger
+
+    Evaluate -->|Compare scores| Logger
+    Act -->|New profile| Recommender
+    Recommender -->|Re-score songs| Evaluate
+    Evaluate -->|Show metrics| Explain
+    Explain -->|Display to user| Review
+
+    Logger -->|Write events| File["📁 agent.log<br/>(Session, Feedback,<br/>Status, Changes)"]
+
+    Feedback -->|quit| End["✅ Session End"]
+
+    %% Testing connections
+    TestAgent -->|Validates| Agent
+    TestAgent -->|Validates| ParseStatus
+    TestAgent -->|Validates| Analyze
+    TestRecommender -->|Validates| Recommender
+    TestRecommender -->|Validates| Scorer
+
+    style User fill:#e1f5ff,color:#000
+    style Review fill:#e1f5ff,color:#000
+    style Feedback fill:#e1f5ff,color:#000
+    style UserProfile fill:#fff9c4,color:#000
+    style Recommender fill:#c8e6c9,color:#000
+    style Agent fill:#f0f4c3,color:#000
+    style Logger fill:#ffccbc,color:#000
+    style File fill:#ffccbc,color:#000
+    style TestAgent fill:#e8d5f2,color:#000
+    style TestRecommender fill:#e8d5f2,color:#000
