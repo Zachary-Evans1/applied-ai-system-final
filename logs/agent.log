@@ -1,0 +1,38 @@
+2026-07-31 10:21:38,387 - INFO - === Session Started ===
+2026-07-31 10:21:38,387 - INFO - Initial profile: genre=pop, mood=happy, energy=0.5, tempo=100.0, valence=0.5
+2026-07-31 10:21:38,396 - INFO - User feedback received: more energetic and happier
+2026-07-31 10:21:38,396 - INFO - Parse status: clear - 
+2026-07-31 10:21:38,396 - INFO - Applied energy: 0.50 -> 0.60
+2026-07-31 10:21:38,396 - INFO - Applied valence: 0.50 -> 0.60
+2026-07-31 10:21:38,396 - INFO - Evaluation: 2 songs changed, average score 50.3 -> 51.4
+2026-07-31 10:21:38,396 - INFO - User feedback received: faster
+2026-07-31 10:21:38,396 - INFO - Parse status: clear - 
+2026-07-31 10:21:38,396 - INFO - Applied tempo: 100.00 -> 110.00
+2026-07-31 10:21:38,396 - INFO - Evaluation: 2 songs changed, average score 51.4 -> 52.7
+2026-07-31 10:21:38,397 - INFO - === Session Ended ===
+2026-07-31 10:23:27,282 - INFO - === Session Started ===
+2026-07-31 10:23:27,282 - INFO - Initial profile: genre=pop, mood=happy, energy=0.5, tempo=100.0, valence=0.5
+2026-07-31 10:23:27,283 - INFO - User feedback received: more energetic
+2026-07-31 10:23:27,283 - INFO - Parse status: clear - 
+2026-07-31 10:23:27,283 - INFO - Applied energy: 0.50 -> 0.60
+2026-07-31 10:23:27,283 - INFO - Evaluation: 1 songs changed, average score 50.3 -> 51.1
+2026-07-31 10:23:27,283 - INFO - === Session Ended ===
+2026-08-01 13:05:44,363 - INFO - === Session Started ===
+2026-08-01 13:05:58,437 - INFO - Initial profile: genre=pop, mood=happy, energy=0.8, tempo=120.0, valence=0.6
+2026-08-01 13:06:50,046 - INFO - User feedback received: more energetic
+2026-08-01 13:06:50,046 - INFO - Parse status: clear - 
+2026-08-01 13:06:50,046 - INFO - Applied energy: 0.80 -> 0.90
+2026-08-01 13:06:50,046 - INFO - Evaluation: 0 songs changed, average score 54.8 -> 54.5
+2026-08-01 13:07:48,660 - INFO - User feedback received: more energetic and happier
+2026-08-01 13:07:48,661 - INFO - Parse status: clear - 
+2026-08-01 13:07:48,661 - INFO - Applied energy: 0.90 -> 1.00
+2026-08-01 13:07:48,661 - INFO - Applied valence: 0.60 -> 0.70
+2026-08-01 13:07:48,661 - INFO - Evaluation: 1 songs changed, average score 54.5 -> 53.5
+2026-08-01 13:09:10,030 - INFO - User feedback received: please don't make it faster, i want it slower
+2026-08-01 13:09:10,030 - INFO - Parse status: ambiguous - Conflicting commands detected: faster, slower
+2026-08-01 13:09:10,030 - INFO - Confirmation requested: Conflicting commands detected: faster, slower
+2026-08-01 13:09:35,146 - INFO - User confirmation response: rejected
+2026-08-01 13:49:14,343 - INFO - User feedback received: make it more danceable
+2026-08-01 13:49:14,343 - INFO - Parse status: unsupported - No recognized commands found.
+2026-08-01 13:49:14,343 - WARNING - Unsupported command received
+2026-08-01 13:49:38,116 - INFO - === Session Ended ===
